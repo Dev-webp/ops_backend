@@ -1,0 +1,32 @@
+{
+  "name": "vjc-ops-portal-backend",
+  "version": "2.0.0",
+  "description": "VJC Overseas - Quality Audit & Case Filing Operations Portal (API)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node db/seed.js",
+    "seed:demo": "node db/seed-demo.js",
+    "reset": "node db/reset.js",
+    "reset:seed": "node db/reset.js && node db/seed.js",
+    "reset:demo": "node db/reset.js && node db/seed-demo.js"
+  },
+  "engines": {
+    "node": ">=18.11"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.0",
+    "nodemon": "^3.1.14",
+    "pg": "^8.11.5"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
