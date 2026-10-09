@@ -77,3 +77,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`\n  VJC Ops API running → http://localhost:${PORT}\n`);
 });
+module.exports = app;
