@@ -43,9 +43,9 @@ app.use(cookieParser());
  * Local development: create upload folders on disk.
  * Vercel serverless: skip local folder creation.
  */
-const isVercel = Boolean(process.env.VERCEL);
+const isProduction = process.env.NODE_ENV === 'production';
 
-if (!isVercel) {
+if (!isProduction) {
   ['audits', 'case_documents'].forEach((dir) => {
     fs.mkdirSync(path.join(__dirname, 'uploads', dir), {
       recursive: true,
@@ -54,7 +54,6 @@ if (!isVercel) {
 
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 }
-
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
