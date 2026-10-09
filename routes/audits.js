@@ -6,22 +6,32 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: path.join(__dirname, '..', 'uploads', 'audits'),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.mp3';
-    cb(null, `audit_${req.params.leadId}_${Date.now()}${ext}`);
-  },
-});
+
+const isVercel = Boolean(process.env.VERCEL);
+
+const storage = isVercel
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: path.join(__dirname, '..', 'uploads', 'audits'),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname) || '.mp3';
+        cb(null, `audit_${req.params.leadId}_${Date.now()}${ext}`);
+      },
+    });
+
 const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
   fileFilter: (req, file, cb) => {
     const allowed = ['.mp3', '.wav', '.m4a', '.ogg'];
-    if (allowed.includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Only audio files (mp3, wav, m4a, ogg) are allowed'));
+    if (allowed.includes(path.extname(file.originalname).toLowerCase())) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files (mp3, wav, m4a, ogg) are allowed'));
+    }
   },
 });
+
 
 // Leads waiting for audit — this is a shared work queue (no auditor assigned
 // yet), so every Auditor / Ops Manager / MD can see it. Counselors and Case
