@@ -38,11 +38,23 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-// Make sure upload folders exist (they are git-ignored, so a fresh clone has none)
-['audits', 'case_documents'].forEach((dir) =>
-  fs.mkdirSync(path.join(__dirname, 'uploads', dir), { recursive: true })
-);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+/*
+ * Local development: create upload folders on disk.
+ * Vercel serverless: skip local folder creation.
+ */
+const isVercel = Boolean(process.env.VERCEL);
+
+if (!isVercel) {
+  ['audits', 'case_documents'].forEach((dir) => {
+    fs.mkdirSync(path.join(__dirname, 'uploads', dir), {
+      recursive: true,
+    });
+  });
+
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+}
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
