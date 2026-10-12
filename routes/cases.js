@@ -57,18 +57,24 @@ l.sent_to_ops_by_name,
 e.name AS officer_name,
 COALESCE(doc.verified_count, 0) AS documents_verified,
 COALESCE(doc.rejected_count, 0) AS rejected_count,
-COALESCE(doc.rejected_documents, '[]'::json) AS rejected_documents   FROM case_assignments ca
+COALESCE(doc.pending_document_review_count, 0)
+  AS pending_document_review_count,
+COALESCE(doc.rejected_documents, '[]'::json) AS rejected_documents 
+ FROM case_assignments ca
    JOIN leads l ON l.id = ca.lead_id
    LEFT JOIN employees e ON e.id = ca.case_officer_id
    LEFT JOIN (
   SELECT
     case_id,
 
-    COUNT(*) FILTER (
-      WHERE status IN ('VERIFIED', 'NOT_REQUIRED')
-      AND doc_type NOT LIKE 'ADDITIONAL_%'
-    ) AS verified_count,
+COUNT(*) FILTER (
+  WHERE status IN ('VERIFIED', 'NOT_REQUIRED')
+  AND doc_type NOT LIKE 'ADDITIONAL_%'
+) AS verified_count,
 
+COUNT(*) FILTER (
+  WHERE status = 'UPLOADED'
+) AS pending_document_review_count,
     COUNT(*) FILTER (
       WHERE status = 'REJECTED'
       AND doc_type NOT LIKE 'ADDITIONAL_%'
