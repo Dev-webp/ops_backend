@@ -6,9 +6,8 @@
 -- replay protection. This is a verification-only migration.
 --
 -- ACTUAL STRUCTURE (verified from database):
--- - jti: UUID, NOT NULL, PRIMARY KEY
+-- - jti: TEXT, NOT NULL, PRIMARY KEY
 -- - expires_at: TIMESTAMPTZ, NOT NULL
--- - consumed_at: TIMESTAMPTZ, NOT NULL
 -- - Index on expires_at (for cleanup)
 --
 -- ATOMIC TOKEN CONSUMPTION PATTERN:
@@ -33,7 +32,7 @@ END $$;
 -- Check required columns
 DO $$
 DECLARE
-  required_columns TEXT[] := ARRAY['jti', 'expires_at', 'consumed_at'];
+  required_columns TEXT[] := ARRAY['jti', 'expires_at'];
   missing_columns TEXT[];
   col_rec RECORD;
 BEGIN
@@ -85,11 +84,11 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'ops_sso_used_tokens'
       AND column_name = 'jti'
-      AND data_type = 'uuid'
+      AND data_type = 'text'
   ) THEN
-    RAISE WARNING 'WARNING: jti column is not UUID type. Token format may be incompatible.';
+    RAISE WARNING 'WARNING: jti column is not TEXT type. Token format may be incompatible.';
   ELSE
-    RAISE NOTICE '✓ jti column is UUID type (correct for JWT jti)';
+    RAISE NOTICE '✓ jti column is TEXT type (correct for JWT jti)';
   END IF;
 END $$;
 
@@ -104,20 +103,6 @@ BEGIN
     RAISE WARNING 'WARNING: No expires_at column. Cannot implement token expiration cleanup.';
   ELSE
     RAISE NOTICE '✓ expires_at column exists (supports token expiration cleanup)';
-  END IF;
-END $$;
-
--- Check for consumed_at column (for audit trail)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'ops_sso_used_tokens'
-      AND column_name = 'consumed_at'
-  ) THEN
-    RAISE WARNING 'WARNING: No consumed_at column. Cannot audit token consumption time.';
-  ELSE
-    RAISE NOTICE '✓ consumed_at column exists (supports audit trail)';
   END IF;
 END $$;
 
@@ -164,8 +149,8 @@ SELECT
 -- 1. Validate JWT signature, issuer, audience, purpose
 -- 2. Extract jti, expires_at from JWT
 -- 3. Atomic check-and-insert to prevent replay:
-INSERT INTO ops_sso_used_tokens (jti, expires_at, consumed_at)
-VALUES ($1, $2, now())
+INSERT INTO ops_sso_used_tokens (jti, expires_at)
+VALUES ($1, $2)
 ON CONFLICT (jti) DO NOTHING;
 
 -- 4. Check if insertion succeeded (if not, token was replayed)
@@ -211,14 +196,10 @@ SELECT
 
 SELECT
   'HRMS provides jti (JWT ID)' as token_field_1,
-  'OPS stores jti as UUID' as storage_1,
-  '✓ Compatible (requires UUID conversion)' as status_1;
+  'OPS stores jti as TEXT' as storage_1,
+  '✓ Compatible (no conversion required)' as status_1;
 
 SELECT
   'HRMS provides exp (expiration timestamp)' as token_field_2,
   'OPS stores expires_at as TIMESTAMPTZ' as storage_2,
   '✓ Compatible (use JWT exp as expires_at)' as status_2;
-
-SELECT
-  'Required conversion: string jti → UUID' as conversion,
-  'Use: gen_random_uuid() or parse from JWT' as method;

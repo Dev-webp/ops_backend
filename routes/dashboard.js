@@ -18,6 +18,9 @@ const ownCasesOnly = work_profile === 'CASE_OFFICER' && role !== 'manager';
         ? pool.query(`SELECT COUNT(*) FROM leads WHERE current_status = 'AGREEMENT_SIGNED' AND counselor_id = $1`, [userId])
         : pool.query(`SELECT COUNT(*) FROM leads WHERE current_status = 'AGREEMENT_SIGNED'`),
       ownAuditsOnly
+        ? pool.query(`SELECT COUNT(*) FROM quality_audits WHERE status = 'PENDING' AND auditor_id = $1`, [userId])
+        : pool.query(`SELECT COUNT(*) FROM quality_audits WHERE status = 'PENDING'`),
+      ownAuditsOnly
         ? pool.query(`SELECT COUNT(*) FROM quality_audits WHERE status = 'APPROVED' AND auditor_id = $1`, [userId])
         : pool.query(`SELECT COUNT(*) FROM quality_audits WHERE status = 'APPROVED'`),
       ownAuditsOnly
@@ -67,7 +70,10 @@ const ownCasesOnly = work_profile === 'CASE_OFFICER' && role !== 'manager';
         approved: Number(approvedAudit.rows[0].count),
         rejected: Number(rejectedAudit.rows[0].count),
       },
-      leads: { total: Number(totalLeads.rows[0].count) },
+      leads: { 
+        total: Number(totalLeads.rows[0].count),
+        pending: Number(pendingAudit.rows[0].count) // Add pending leads count
+      },
       cases: {
         total: Number(totalCases.rows[0].count),
         completed: Number(completedCases.rows[0].count),
