@@ -10,7 +10,8 @@
     "seed:demo": "node db/seed-demo.js",
     "reset": "node db/reset.js",
     "reset:seed": "node db/reset.js && node db/seed.js",
-    "reset:demo": "node db/reset.js && node db/seed-demo.js"
+    "reset:demo": "node db/reset.js && node db/seed-demo.js",
+    "test": "node --test tests/*.test.js"
   },
   "engines": {
     "node": ">=18.11"
@@ -28,5 +29,16 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "directories": {
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dev-webp/ops_backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Dev-webp/ops_backend/issues"
+  },
+  "homepage": "https://github.com/Dev-webp/ops_backend#readme"
 }

@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db/pool');
-const { requireAuth, requireRole, requireInternalKey } = require('../middleware/auth');
+const { requireAuth, requireRole, requireInternalKey, isManagementUser } = require('../middleware/auth');
 const router = express.Router();
 
 // List leads, optional ?status=
@@ -18,7 +18,7 @@ router.get('/', requireAuth, requireRole('COUNSELOR', 'OPS_MANAGER', 'MD'), asyn
       conditions.push(`l.current_status = $${params.length}`);
     }
 
-if (req.user.work_profile === 'COUNSELOR') {
+if (!isManagementUser(req.user)) {
         params.push(req.user.id);
       conditions.push(`l.counselor_id = $${params.length}`);
     }

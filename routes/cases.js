@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db/pool');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, isManagementUser } = require('../middleware/auth');
+const { assertCaseAccess } = require('../utils/caseAccess');
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/board', requireAuth, requireRole('CASE_OFFICER', 'OPS_MANAGER', 'MD
   try {
     const conditions = [];
     const params = [];
-if (req.user.work_profile === 'CASE_OFFICER') {
+if (!isManagementUser(req.user)) {
         params.push(req.user.id);
       conditions.push(`ca.case_officer_id = $${params.length}`);
     }
@@ -57,24 +58,18 @@ l.sent_to_ops_by_name,
 e.name AS officer_name,
 COALESCE(doc.verified_count, 0) AS documents_verified,
 COALESCE(doc.rejected_count, 0) AS rejected_count,
-COALESCE(doc.pending_document_review_count, 0)
-  AS pending_document_review_count,
-COALESCE(doc.rejected_documents, '[]'::json) AS rejected_documents 
- FROM case_assignments ca
+COALESCE(doc.rejected_documents, '[]'::json) AS rejected_documents   FROM case_assignments ca
    JOIN leads l ON l.id = ca.lead_id
    LEFT JOIN employees e ON e.id = ca.case_officer_id
    LEFT JOIN (
   SELECT
     case_id,
 
-COUNT(*) FILTER (
-  WHERE status IN ('VERIFIED', 'NOT_REQUIRED')
-  AND doc_type NOT LIKE 'ADDITIONAL_%'
-) AS verified_count,
+    COUNT(*) FILTER (
+      WHERE status IN ('VERIFIED', 'NOT_REQUIRED')
+      AND doc_type NOT LIKE 'ADDITIONAL_%'
+    ) AS verified_count,
 
-COUNT(*) FILTER (
-  WHERE status = 'UPLOADED'
-) AS pending_document_review_count,
     COUNT(*) FILTER (
       WHERE status = 'REJECTED'
       AND doc_type NOT LIKE 'ADDITIONAL_%'
@@ -189,7 +184,7 @@ router.patch('/:caseId/stage', requireAuth, requireRole('CASE_OFFICER', 'OPS_MAN
 
     // A Case Officer may only move stages on cases assigned to themselves.
     // Ops Manager / MD (chairman) can move any case.
-if (req.user.work_profile === 'CASE_OFFICER') {
+if (!isManagementUser(req.user)) {
         const ownerCheck = await client.query(
         `SELECT case_officer_id FROM case_assignments WHERE id = $1`, [caseId]
       );
@@ -288,7 +283,7 @@ router.put(
       }
 
       if (
-        req.user.work_profile === 'CASE_OFFICER' &&
+        !isManagementUser(req.user) &&
         caseResult.rows[0].case_officer_id !== req.user.id
       ) {
         return res.status(403).json({
@@ -364,6 +359,9 @@ router.get(
 
     try {
 
+      const access = await assertCaseAccess(pool, caseId, req.user);
+      if (!access.ok) return res.status(access.code).json({ error: access.error });
+
       const result = await pool.query(
         `SELECT *
          FROM case_financial_documentation
@@ -426,7 +424,7 @@ router.put(
       }
 
       if (
-        req.user.work_profile === 'CASE_OFFICER' &&
+        !isManagementUser(req.user) &&
         caseResult.rows[0].case_officer_id !== req.user.id
       ) {
         return res.status(403).json({
@@ -502,6 +500,9 @@ router.get(
 
     try {
 
+      const access = await assertCaseAccess(pool, caseId, req.user);
+      if (!access.ok) return res.status(access.code).json({ error: access.error });
+
       const result = await pool.query(
         `SELECT *
          FROM case_embassy_slot
@@ -552,7 +553,7 @@ router.put('/:caseId/pre-departure', requireAuth, requireRole('CASE_OFFICER', 'O
 
     // Case Officer can update only their own case
     if (
-req.user.work_profile === 'CASE_OFFICER' &&
+!isManagementUser(req.user) &&
       caseResult.rows[0].case_officer_id !== req.user.id
     ) {
       return res.status(403).json({ error: 'This case is not assigned to you' });
@@ -629,6 +630,9 @@ router.get('/:caseId/pre-departure', requireAuth, requireRole('CASE_OFFICER', 'O
   const { caseId } = req.params;
 
   try {
+    const access = await assertCaseAccess(pool, caseId, req.user);
+    if (!access.ok) return res.status(access.code).json({ error: access.error });
+
     const result = await pool.query(
       `SELECT *
        FROM case_pre_departure
@@ -673,7 +677,7 @@ router.put('/:caseId/travel-arrival', requireAuth, requireRole('CASE_OFFICER', '
     }
 
     if (
-req.user.work_profile === 'CASE_OFFICER' &&
+!isManagementUser(req.user) &&
       caseResult.rows[0].case_officer_id !== req.user.id
     ) {
       return res.status(403).json({ error: 'This case is not assigned to you' });
@@ -737,6 +741,9 @@ router.get('/:caseId/travel-arrival', requireAuth, requireRole('CASE_OFFICER', '
   const { caseId } = req.params;
 
   try {
+    const access = await assertCaseAccess(pool, caseId, req.user);
+    if (!access.ok) return res.status(access.code).json({ error: access.error });
+
     const result = await pool.query(
       `SELECT *
        FROM case_travel_arrival
@@ -779,7 +786,7 @@ router.put('/:caseId/student-onboarding', requireAuth, requireRole('CASE_OFFICER
     }
 
     if (
-req.user.work_profile === 'CASE_OFFICER' &&
+!isManagementUser(req.user) &&
       caseResult.rows[0].case_officer_id !== req.user.id
     ) {
       return res.status(403).json({ error: 'This case is not assigned to you' });
@@ -859,6 +866,9 @@ router.get('/:caseId/student-onboarding', requireAuth, requireRole('CASE_OFFICER
   const { caseId } = req.params;
 
   try {
+    const access = await assertCaseAccess(pool, caseId, req.user);
+    if (!access.ok) return res.status(access.code).json({ error: access.error });
+
     const result = await pool.query(
       `SELECT *
        FROM case_student_onboarding

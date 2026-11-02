@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const pool = require('../db/pool');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, isManagementUser } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ const upload = multer({
     if (allowed.includes(path.extname(file.originalname).toLowerCase())) {
       cb(null, true);
     } else {
-      cb(new Error('Only audio files (mp3, wav, m4a, ogg) are allowed'));
+      cb(Object.assign(new Error('Only audio files (mp3, wav, m4a, ogg) are allowed'), { status: 400, expose: true }));
     }
   },
 });
@@ -58,7 +58,9 @@ router.get('/history', requireAuth, requireRole('AUDITOR', 'OPS_MANAGER', 'MD'),
   try {
     const conditions = [];
     const params = [];
-    if (req.user.role === 'AUDITOR') {
+    // Anyone who is not management (the route only admits Auditors and
+    // management) sees only the audits they conducted.
+    if (!isManagementUser(req.user)) {
       params.push(req.user.id);
       conditions.push(`qa.auditor_id = $${params.length}`);
     }

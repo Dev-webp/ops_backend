@@ -4,6 +4,7 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const pool = require('./pool');
+const { assertSafeToRunDestructive } = require('./safety');
 
 const DEMO_PASSWORD = 'Vjc@2026';
 
@@ -16,6 +17,7 @@ const KANBAN_STAGES = [
 async function seed() {
   const client = await pool.connect();
   try {
+    await assertSafeToRunDestructive(client, 'seed-demo');
     await client.query('BEGIN');
 
     const branchRes = await client.query(
@@ -123,8 +125,8 @@ async function seed() {
     console.log('');
     console.log('Lead ready for audit id=' + l1 + ' (Rahul Varma)');
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Seed failed:', err);
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(...(err.code === 'UNSAFE_DB_SCRIPT' ? [`Blocked: ${err.message}`] : ['Seed failed:', err]));
     process.exitCode = 1;
   } finally {
     client.release();

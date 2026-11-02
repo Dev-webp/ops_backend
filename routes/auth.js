@@ -97,21 +97,18 @@ router.get('/me', requireAuth, (req, res) => {
 
 
 router.post('/sso', async (req, res) => {
-  console.log('[OPS_SSO] Received SSO request');
   const secret = process.env.HRMS_OPS_SSO_SECRET;
 
-  if (!secret) {
-    console.error('[OPS_SSO] HRMS_OPS_SSO_SECRET is not configured');
+  if (!secret || secret.length < 32 || secret === process.env.JWT_SECRET) {
+    console.error('[OPS_SSO] HRMS_OPS_SSO_SECRET missing, short, or equal to JWT_SECRET');
     return res.status(503).json({ error: 'SSO is not configured' });
   }
 
   const { ssoToken } = req.body || {};
   if (!ssoToken) {
-    console.error('[OPS_SSO] No ssoToken in request body');
     return res.status(400).json({ error: 'SSO token is required' });
   }
 
-  console.log('[OPS_SSO] Token received, verifying...');
   let claims;
 
   try {
@@ -120,9 +117,7 @@ router.post('/sso', async (req, res) => {
       issuer: 'hrms',
       audience: 'ops',
     });
-    console.log('[OPS_SSO] Token verified, claims:', { email: claims.email, employee_code: claims.employee_code });
-  } catch (err) {
-    console.error('[OPS_SSO] Token verification failed:', err.message);
+  } catch {
     return res.status(401).json({ error: 'Invalid or expired SSO token' });
   }
 
@@ -133,7 +128,6 @@ router.post('/sso', async (req, res) => {
     !claims.employee_code ||
     !claims.hrms_user_id
   ) {
-    console.error('[OPS_SSO] Invalid claims:', { purpose: claims.purpose, hasJti: !!claims.jti, hasEmail: !!claims.email, hasEmployeeCode: !!claims.employee_code, hasHrmsUserId: !!claims.hrms_user_id });
     return res.status(401).json({ error: 'Invalid SSO claims' });
   }
 
@@ -176,7 +170,7 @@ router.post('/sso', async (req, res) => {
        GROUP BY
          e.id, e.name, e.email, e.role, e.work_profile,
          e.designation, e.specialty, b.branch_name
-       LIMIT 1`,
+       LIMIT 2`,
       [
         String(claims.email).trim().toLowerCase(),
         String(claims.employee_code).trim(),
@@ -189,6 +183,11 @@ router.post('/sso', async (req, res) => {
       return res.status(403).json({
         error: 'No active OPS account matches this HRMS identity',
       });
+    }
+
+    if (result.rows.length > 1) {
+      await client.query('COMMIT');
+      return res.status(409).json({ error: 'More than one OPS account matches this identity' });
     }
 
     const user = result.rows[0];
@@ -205,18 +204,17 @@ router.post('/sso', async (req, res) => {
     };
 
     const opsToken = jwt.sign(payload, JWT_SECRET, {
-      expiresIn: '12h',
+      algorithm: 'HS256',
+      expiresIn: process.env.OPS_SSO_SESSION_TTL || '4h',
     });
 
     await client.query('COMMIT');
 
-    res.cookie('vjc_token', opsToken, {
-      ...cookieOptions,
-      maxAge: 12 * 60 * 60 * 1000,
-    });
-
+    // Bearer token in the body only. No cookie: the HRMS frontend keeps it in
+    // memory so it cannot outlive the HRMS session or cross to another user.
     return res.json({
       success: true,
+      token: opsToken,
       user: { ...payload, branch_name: user.branch_name },
     });
   } catch (err) {

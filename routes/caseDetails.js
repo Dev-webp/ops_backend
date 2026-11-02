@@ -1,21 +1,11 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { assertCaseAccess } = require('../utils/caseAccess');
 
 const router = express.Router();
 
-// Same ownership rule as documents/cases: a Case Officer only touches their
-// own cases; Ops Manager / MD can touch any case.
-async function assertCaseAccess(client, caseId, user) {
-  const result = await client.query(
-    `SELECT case_officer_id FROM case_assignments WHERE id = $1`, [caseId]
-  );
-  if (result.rows.length === 0) return { ok: false, code: 404, error: 'Case not found' };
-  if (user.role === 'CASE_OFFICER' && result.rows[0].case_officer_id !== user.id) {
-    return { ok: false, code: 403, error: 'This case is not assigned to you' };
-  }
-  return { ok: true };
-}
+// Ownership rule is shared with documents and cases: see utils/caseAccess.js.
 
 // One combined GET — returns all 4 detail sections for a case in one call
 // so the "Case Details" modal only needs a single round trip.

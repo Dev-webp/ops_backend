@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const pool = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { assertCaseAccess } = require('../utils/caseAccess');
 
 const router = express.Router();
 
@@ -28,22 +29,11 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
     if (allowed.includes(path.extname(file.originalname).toLowerCase())) cb(null, true);
-    else cb(new Error('Only PDF, JPG or PNG files are allowed'));
+    else cb(Object.assign(new Error('Only PDF, JPG or PNG files are allowed'), { status: 400, expose: true }));
   },
 });
 
-// Shared helper: a Case Officer may only touch documents on cases assigned
-// to themselves. Ops Manager / MD (chairman) can touch any case's documents.
-async function assertCaseAccess(client, caseId, user) {
-  const result = await client.query(
-    `SELECT case_officer_id FROM case_assignments WHERE id = $1`, [caseId]
-  );
-  if (result.rows.length === 0) return { ok: false, code: 404, error: 'Case not found' };
-  if (user.role === 'CASE_OFFICER' && result.rows[0].case_officer_id !== user.id) {
-    return { ok: false, code: 403, error: 'This case is not assigned to you' };
-  }
-  return { ok: true };
-}
+// Case ownership rule lives in utils/caseAccess.js (shared with cases and case details).
 
 // List every document uploaded so far for one case, plus the fixed
 // checklist of 7 required types so the UI can show what's still missing.

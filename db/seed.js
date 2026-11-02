@@ -6,13 +6,19 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const pool = require('./pool');
+const { assertSafeToRunDestructive } = require('./safety');
 
 const DEMO_PASSWORD = 'Vjc@2026';
 
+// NOTE: this script predates migration 008 (it writes employees.role but not
+// work_profile), so accounts it creates cannot log in on a current schema. It
+// is development-only and is now blocked from running against anything that
+// looks like the HRMS database or without explicit confirmation.
 async function seed() {
   const client = await pool.connect();
 
   try {
+    await assertSafeToRunDestructive(client, 'seed');
     await client.query('BEGIN');
 
     // Find existing branch first.
@@ -118,8 +124,8 @@ async function seed() {
     );
 
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Seed failed:', err);
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(...(err.code === 'UNSAFE_DB_SCRIPT' ? [`Blocked: ${err.message}`] : ['Seed failed:', err]));
     process.exitCode = 1;
   } finally {
     client.release();

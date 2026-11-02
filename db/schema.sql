@@ -3,6 +3,27 @@
 -- Run this in pgAdmin's Query Tool (or via psql) against your database.
 -- =====================================================================
 
+-- ---------------------------------------------------------------------
+-- SAFETY GUARD. This script DROPS and recreates the OPS tables (including employees and branches).
+-- It refuses to run in a database that contains HRMS tables, and it only runs
+-- if you deliberately opt in first, in the SAME session, with:
+--     SET ops.confirm_destroy = 'yes';
+-- (pgAdmin Query Tool: run that line first, then run this file.)
+-- ---------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = current_schema()
+      AND table_name IN ('users', 'attendance', 'leave_requests', 'payroll', 'payslip_records')
+  ) THEN
+    RAISE EXCEPTION 'Refusing to run: this looks like the HRMS database, not the OPS database';
+  END IF;
+  IF COALESCE(current_setting('ops.confirm_destroy', true), '') <> 'yes' THEN
+    RAISE EXCEPTION 'Refusing to run: this script %. Run  SET ops.confirm_destroy = ''yes'';  first if you really mean it', 'drops tables';
+  END IF;
+END $$;
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid()
 
 DROP TABLE IF EXISTS case_activity CASCADE;
@@ -37,7 +58,7 @@ CREATE TABLE employees (
   password_hash TEXT NOT NULL,
   role user_role NOT NULL,
   designation VARCHAR(100) DEFAULT 'Employee',
-  phone VARCHAR(20) NOT NULL,
+  phone VARCHAR(20),  -- nullable: no code path supplies an employee phone (see migration 009)
   specialty VARCHAR(100),          -- e.g. 'UK Specialist', 'USA Specialist' (for case officers)
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
@@ -60,7 +81,7 @@ CREATE TABLE leads (
   counselor_id UUID REFERENCES employees(id),
   student_name VARCHAR(150) NOT NULL,
   email VARCHAR(150) NOT NULL,
-  phone VARCHAR(20) NOT NULL,
+  phone VARCHAR(20),  -- nullable: no code path supplies an employee phone (see migration 009)
   target_country VARCHAR(100) NOT NULL,
   visa_category VARCHAR(50) NOT NULL,
   package_amount NUMERIC(10,2) DEFAULT 0,

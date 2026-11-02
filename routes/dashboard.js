@@ -6,14 +6,20 @@ const router = express.Router();
 
 router.get('/stats', requireAuth, async (req, res) => {
   try {
-const { role, work_profile, id: userId } = req.user;
+const { work_profile, work_profiles, id: userId } = req.user;
 
-// Chairman and Manager see the whole company.
+// Support both single work_profile and work_profiles array
+const profiles = Array.isArray(work_profiles) && work_profiles.length
+  ? work_profiles
+  : work_profile ? [work_profile] : [];
+const isManagement = profiles.some(p => p === 'MD' || p === 'OPS_MANAGER');
+
+// Chairman and Operations Manager see the whole company.
 // Employees see only the work belonging to their own OPS profile.
-const ownLeadsOnly = work_profile === 'COUNSELOR' && role !== 'manager';
-const ownAuditsOnly = work_profile === 'AUDITOR' && role !== 'manager';
-const ownCasesOnly = work_profile === 'CASE_OFFICER' && role !== 'manager';
-    const [pendingAudit, approvedAudit, rejectedAudit, totalLeads] = await Promise.all([
+const ownLeadsOnly = profiles.includes('COUNSELOR') && !isManagement;
+const ownAuditsOnly = profiles.includes('AUDITOR') && !isManagement;
+const ownCasesOnly = profiles.includes('CASE_OFFICER') && !isManagement;
+    const [pendingLeads, pendingAudit, approvedAudit, rejectedAudit, totalLeads] = await Promise.all([
       ownLeadsOnly
         ? pool.query(`SELECT COUNT(*) FROM leads WHERE current_status = 'AGREEMENT_SIGNED' AND counselor_id = $1`, [userId])
         : pool.query(`SELECT COUNT(*) FROM leads WHERE current_status = 'AGREEMENT_SIGNED'`),
@@ -70,9 +76,9 @@ const ownCasesOnly = work_profile === 'CASE_OFFICER' && role !== 'manager';
         approved: Number(approvedAudit.rows[0].count),
         rejected: Number(rejectedAudit.rows[0].count),
       },
-      leads: { 
+      leads: {
         total: Number(totalLeads.rows[0].count),
-        pending: Number(pendingAudit.rows[0].count) // Add pending leads count
+        pending: Number(pendingLeads.rows[0].count)
       },
       cases: {
         total: Number(totalCases.rows[0].count),
